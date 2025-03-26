@@ -36,7 +36,7 @@ export default function Home() {
 
   const submitMatch = async () => {
     try {
-      const response = await fetch("http://localhost:8000/calculate-elo", {
+      const response = await fetch("http://15.204.218.33:8000/calculate-elo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
