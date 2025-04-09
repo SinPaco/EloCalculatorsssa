@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react"; 
 
 export default function Home() {
   const generateRandomNames = () => {
@@ -9,24 +9,76 @@ export default function Home() {
     return names;
   };
 
+  const getChangeBackgroundColor = (eloChange) => {
+    return parseInt(eloChange) > 0 ? "bg-green-200" : "bg-red-200"; // Green for positive, Red for negative
+  };
+
+  const getTeamBackgroundColor = (team) => {
+    switch (team) {
+      case "Village":
+        return "bg-green-300";
+      case "Werewolf":
+        return "bg-red-300";
+      case "Solo Killer":
+      case "Solo Voting":
+        return "bg-yellow-300";
+      case "Couple/Instigator":
+        return "bg-pink-300";
+      default:
+        return "";
+    }
+  };
+
+  const getLeagueFontColor = (league) => {
+    switch (league) {
+      case "Aspirante":
+        return "text-purple-500";
+      case "Experimentado":
+        return "text-purple-300";
+      case "Veterano":
+        return "text-green-500";
+      case "Profesional":
+        return "text-orange-500";
+      case "Elite":
+        return "text-cyan-500";
+      case "Maestro":
+        return "text-blue-800";
+      case "Leyenda":
+        return "text-yellow-500";
+      default:
+        return "";
+    }
+  };
+
   const defaultPlayers = generateRandomNames().map((name, index) => {
     let team = "Village";
+    let league = "Aspirante"; // Default league value
     if (index >= 10 && index < 14) {
       team = "Werewolf";
+      league = "Veterano";
     } else if (index === 14) {
       team = "Solo Voting";
+      league = "Elite";
     } else if (index === 15) {
       team = "Solo Killer";
+      league = "Leyenda";
     } else if (index === 16) {
       team = "Couple/Instigator";
+      league = "Maestro";
     }
 
-    return { name, elo: 1000, team, diedNight1: false };
+    return { name, elo: 1000, team, diedNight1: false, league, penalty: false };
   });
 
   const [players, setPlayers] = useState(defaultPlayers);
+  const [savedProfiles, setSavedProfiles] = useState([]);
   const [winningTeam, setWinningTeam] = useState("Village");
   const [results, setResults] = useState(null);
+
+  useEffect(() => {
+    const storedProfiles = JSON.parse(localStorage.getItem("savedProfiles")) || [];
+    setSavedProfiles(storedProfiles);
+  }, []);
 
   const handleChange = (index, field, value) => {
     const newPlayers = [...players];
@@ -34,9 +86,31 @@ export default function Home() {
     setPlayers(newPlayers);
   };
 
+  const saveProfiles = () => {
+    const updatedProfiles = players.map(player => ({
+      name: player.name,
+      elo: player.elo,
+      team: player.team
+    }));
+    localStorage.setItem("savedProfiles", JSON.stringify(updatedProfiles));
+    setSavedProfiles(updatedProfiles);
+    alert("Player profiles saved successfully!");
+  };
+
+  const handleProfileSelect = (index, selectedProfile) => {
+    const newPlayers = [...players];
+    newPlayers[index] = {
+      ...newPlayers[index],
+      name: selectedProfile.name,
+      elo: selectedProfile.elo,
+      team: selectedProfile.team
+    };
+    setPlayers(newPlayers);
+  };
+
   const submitMatch = async () => {
     try {
-      const response = await fetch("http://15.204.218.33:8000/calculate-elo", {
+      const response = await fetch("http://localhost:8000/calculate-elo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -44,7 +118,8 @@ export default function Home() {
             name: player.name,
             current_elo: player.elo,
             team: player.team,
-            died_night_1: player.diedNight1
+            died_night_1: player.diedNight1,
+            penalty: player.penalty,
           })),
           village_won: winningTeam === "Village",
           solo_killer_won: winningTeam === "Solo Killer",
@@ -58,59 +133,33 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log(data);
+      console.log("Backend Response:", data);
       setResults({
         players: data.results,
         avgVillageElo: data.avg_village_elo,
         avgEvilAllianceElo: data.avg_evil_alliance_elo,
         expectedResult: data.expected_result,
       });
+
+      const updatedPlayers = players.map(player => {
+        const updatedPlayer = data.results.find(p => p.name === player.name);
+        if (updatedPlayer) {
+          return {
+            ...player,
+            elo: updatedPlayer.new_elo,
+          };
+        }
+        return player;
+      });
+
+      setPlayers(updatedPlayers);
+
     } catch (error) {
       console.error("Fetch error:", error);
       alert("There was an error submitting the match. Please try again.");
     }
   };
 
-  const getTeamBackgroundColor = (team) => {
-    switch (team) {
-      case "Village":
-        return "bg-green-300"; // Darker green
-      case "Werewolf":
-        return "bg-red-300"; // Darker red
-      case "Solo Killer":
-      case "Solo Voting":
-        return "bg-yellow-300"; // Darker yellow
-      case "Couple/Instigator":
-        return "bg-pink-300"; // Darker pink
-      default:
-        return ""; // Default background
-    }
-  };
-
-  const getChangeBackgroundColor = (change) => {
-    return parseInt(change) > 0 ? "bg-green-200" : "bg-red-200"; // Green for positive, Red for negative
-  };
-
-  const getLeagueFontColor = (league) => {
-    switch (league) {
-      case "Aspirante":
-        return "text-purple-500"; // Purple
-      case "Experimentado":
-        return "text-purple-300"; // Light purple
-      case "Veterano":
-        return "text-green-500"; // Green
-      case "Profesional":
-        return "text-orange-500"; // Orange
-      case "Elite":
-        return "text-cyan-500"; // Cyan
-      case "Maestro":
-        return "text-blue-800"; // Dark blue
-      case "Leyenda":
-        return "text-yellow-500"; // Yellow
-      default:
-        return ""; // Default font color
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 font-sans">
@@ -119,6 +168,24 @@ export default function Home() {
       <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl">
         {players.map((player, index) => (
           <div key={index} className="grid grid-cols-4 gap-2 mb-2">
+            <select
+              className="p-2 border rounded"
+              onChange={(e) => {
+                const selectedProfile = savedProfiles.find(p => p.name === e.target.value);
+                if (selectedProfile) {
+                  handleProfileSelect(index, selectedProfile);
+                }
+              }}
+              defaultValue="Select Profile"
+            >
+              <option disabled>Select Profile</option>
+              {savedProfiles.map(savedProfile => (
+                <option key={savedProfile.name} value={savedProfile.name}>
+                  {savedProfile.name} ({savedProfile.elo})
+                </option>
+              ))}
+            </select>
+
             <input
               type="text"
               placeholder={`Player ${index + 1} Name`}
@@ -153,6 +220,14 @@ export default function Home() {
               />
               <span>Died Night 1</span>
             </label>
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={player.penalty}
+                onChange={(e) => handleChange(index, "penalty", e.target.checked)}
+              />
+              <span>Penalización (-50 Elo)</span>
+            </label>
           </div>
         ))}
 
@@ -177,13 +252,19 @@ export default function Home() {
         >
           Submit Match
         </button>
+
+        <button
+          className="mt-4 bg-green-500 text-white p-2 rounded hover:bg-green-600"
+          onClick={saveProfiles}
+        >
+          Save Profiles
+        </button>
       </div>
 
       {results ? (
         <>
-          {/* Additional Metrics Section */}
           <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
-            <h2 className="text-xl font-bold mb-2">📊 Parametros Adicionales</h2>
+            <h2 className="text-2xl font-bold mb-2">📊 Parametros Adicionales</h2>
             <p className="mb-2"><strong>Promedio Aldea Elo:</strong> {Math.round(results.avgVillageElo)}</p>
             <p className="mb-2"><strong>Promedio Alianza Malvada Elo:</strong> {Math.round(results.avgEvilAllianceElo)}</p>
             <p className="mb-2">
@@ -193,7 +274,6 @@ export default function Home() {
             </p>
           </div>
 
-          {/* Match Results Table */}
           <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
             <h2 className="text-2xl font-bold mb-2">📊 Resultados</h2>
             <table className="w-full border-collapse border border-gray-400 mt-4">
@@ -210,15 +290,11 @@ export default function Home() {
               <tbody>
                 {results.players.map((player, index) => (
                   <tr key={index} className="text-center border border-gray-400">
-                    <td className="border p-2">{player.name}</td>
-                    <td className={`border p-2 font-bold ${getTeamBackgroundColor(player.team)}`}>
-                      {player.team}
-                    </td>
-                    <td className="border p-2">{player.old_elo}</td>
-                    <td className="border p-2">{player.new_elo}</td>
-                    <td className={`border p-2 ${getChangeBackgroundColor(player.elo_change)}`}>
-                      {player.elo_change}
-                    </td>
+                    <td className="border p-2 bg-white">{player.name}</td>
+                    <td className={`border p-2 font-bold ${getTeamBackgroundColor(player.team)}`}>{player.team}</td>
+                    <td className="border p-2 bg-white">{player.old_elo}</td>
+                    <td className="border p-2 bg-white">{player.new_elo}</td>
+                    <td className={`border p-2 ${getChangeBackgroundColor(player.elo_change)}`}>{player.elo_change}</td>
                     <td
                       className={`border border-black p-2 font-bold bg-black ${getLeagueFontColor(player.league)}`}
                     >
