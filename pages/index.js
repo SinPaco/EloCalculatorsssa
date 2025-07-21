@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"; 
+import { useState, useEffect } from "react";
 
 export default function Home() {
   const generateRandomNames = () => {
@@ -75,9 +75,32 @@ export default function Home() {
   const [winningTeam, setWinningTeam] = useState("Village");
   const [results, setResults] = useState(null);
 
+  // Change this to your backend base URL
+  const BACKEND_URL = "http://15.204.218.33:8000";
+
   useEffect(() => {
-    const storedProfiles = JSON.parse(localStorage.getItem("savedProfiles")) || [];
-    setSavedProfiles(storedProfiles);
+    async function fetchSavedProfiles() {
+      try {
+        const res = await fetch(`${BACKEND_URL}/get-players`);
+        if (!res.ok) throw new Error("Failed to fetch saved profiles");
+        const data = await res.json();
+
+        // Transform backend data to frontend format with defaults for diedNight1 and penalty
+        const profiles = data.map(p => ({
+          name: p.name,
+          elo: p.current_elo,
+          team: p.team,
+          diedNight1: false,
+          penalty: false,
+        }));
+
+        setSavedProfiles(profiles);
+      } catch (err) {
+        console.error(err);
+        setSavedProfiles([]); // fallback empty
+      }
+    }
+    fetchSavedProfiles();
   }, []);
 
   const handleChange = (index, field, value) => {
@@ -86,15 +109,40 @@ export default function Home() {
     setPlayers(newPlayers);
   };
 
-  const saveProfiles = () => {
-    const updatedProfiles = players.map(player => ({
-      name: player.name,
-      elo: player.elo,
-      team: player.team
-    }));
-    localStorage.setItem("savedProfiles", JSON.stringify(updatedProfiles));
-    setSavedProfiles(updatedProfiles);
-    alert("Player profiles saved successfully!");
+  const saveProfiles = async () => {
+    try {
+      const profilesToSave = players.map(player => ({
+        name: player.name,
+        current_elo: Number(player.elo),
+        team: player.team
+      }));
+
+      const res = await fetch(`${BACKEND_URL}/save-players`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(profilesToSave),
+      });
+
+      if (!res.ok) throw new Error("Failed to save profiles");
+
+      const data = await res.json();
+      alert(data.message || "Players saved successfully!");
+
+      // Refresh savedProfiles from backend
+      const fetchRes = await fetch(`${BACKEND_URL}/get-players`);
+      const updatedProfiles = await fetchRes.json();
+      setSavedProfiles(updatedProfiles.map(p => ({
+        name: p.name,
+        elo: p.current_elo,
+        team: p.team,
+        diedNight1: false,
+        penalty: false,
+      })));
+
+    } catch (error) {
+      console.error(error);
+      alert("Error saving profiles.");
+    }
   };
 
   const handleProfileSelect = (index, selectedProfile) => {
@@ -103,20 +151,22 @@ export default function Home() {
       ...newPlayers[index],
       name: selectedProfile.name,
       elo: selectedProfile.elo,
-      team: selectedProfile.team
+      team: selectedProfile.team,
+      diedNight1: selectedProfile.diedNight1 ?? false,
+      penalty: selectedProfile.penalty ?? false,
     };
     setPlayers(newPlayers);
   };
 
   const submitMatch = async () => {
     try {
-      const response = await fetch("http://15.204.218.33:8000/calculate-elo", {
+      const response = await fetch(`${BACKEND_URL}/calculate-elo`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           players_data: players.map(player => ({
             name: player.name,
-            current_elo: player.elo,
+            current_elo: Number(player.elo),
             team: player.team,
             died_night_1: player.diedNight1,
             penalty: player.penalty,
@@ -124,7 +174,7 @@ export default function Home() {
           village_won: winningTeam === "Village",
           solo_killer_won: winningTeam === "Solo Killer",
           solo_voting_won: winningTeam === "Solo Voting",
-          couple_instigator_won: winningTeam === "Couple/Instigator"
+          couple_instigator_won: winningTeam === "Couple/Instigator",
         }),
       });
 
@@ -160,14 +210,13 @@ export default function Home() {
     }
   };
 
-
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 font-sans">
       <h1 className="text-3xl font-bold mb-4">🏆 Calculadora Liga Española 🏆</h1>
 
       <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl">
         {players.map((player, index) => (
-          <div key={index} className="grid grid-cols-4 gap-2 mb-2">
+          <div key={index} className="grid grid-cols-6 gap-2 mb-2 items-center">
             <select
               className="p-2 border rounded"
               onChange={(e) => {
@@ -220,6 +269,7 @@ export default function Home() {
               />
               <span>Died Night 1</span>
             </label>
+
             <label className="flex items-center space-x-2">
               <input
                 type="checkbox"
@@ -264,7 +314,7 @@ export default function Home() {
       {results ? (
         <>
           <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
-            <h2 className="text-2xl font-bold mb-2">📊 Parametros Adicionales</h2>
+            <h2 className="text-2xl font-bold mb-2">📊 Parámetros Adicionales</h2>
             <p className="mb-2"><strong>Promedio Aldea Elo:</strong> {Math.round(results.avgVillageElo)}</p>
             <p className="mb-2"><strong>Promedio Alianza Malvada Elo:</strong> {Math.round(results.avgEvilAllianceElo)}</p>
             <p className="mb-2">
