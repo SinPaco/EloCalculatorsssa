@@ -64,7 +64,6 @@ export default function Home() {
       team = "Solo Killer";
       league = "Leyenda";
     }
-    // Removed unreachable index === 16 condition
 
     return { name, elo: 1000, team, diedNight1: false, league, penalty: false };
   });
@@ -73,6 +72,7 @@ export default function Home() {
   const [savedProfiles, setSavedProfiles] = useState([]);
   const [winningTeam, setWinningTeam] = useState("Village");
   const [results, setResults] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
   // Change this to your backend base URL
   const BACKEND_URL = "http://15.204.218.33:8000";
@@ -84,7 +84,6 @@ export default function Home() {
         if (!res.ok) throw new Error("Failed to fetch saved profiles");
         const data = await res.json();
 
-        // Transform backend data to frontend format with defaults for diedNight1 and penalty
         const profiles = data.map(p => ({
           name: p.name,
           elo: p.current_elo,
@@ -96,11 +95,46 @@ export default function Home() {
         setSavedProfiles(profiles);
       } catch (err) {
         console.error(err);
-        setSavedProfiles([]); // fallback empty
+        setSavedProfiles([]);
       }
     }
     fetchSavedProfiles();
   }, []);
+
+  // Filtered profiles based on searchTerm — <=== This is the key part for B
+  const filteredProfiles = savedProfiles.filter(profile =>
+    profile.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Delete profile function added here as requested:
+  const deleteProfile = async (name) => {
+    const confirmDelete = window.confirm(`Are you sure you want to delete "${name}"?`);
+    if (!confirmDelete) return;
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/delete-player/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete");
+
+      // Refresh savedProfiles
+      const fetchRes = await fetch(`${BACKEND_URL}/get-players`);
+      const updatedProfiles = await fetchRes.json();
+      setSavedProfiles(updatedProfiles.map(p => ({
+        name: p.name,
+        elo: p.current_elo,
+        team: p.team,
+        diedNight1: false,
+        penalty: false,
+      })));
+
+      alert(`Deleted "${name}" successfully.`);
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting profile.");
+    }
+  };
 
   const handleChange = (index, field, value) => {
     const newPlayers = [...players];
@@ -182,7 +216,6 @@ export default function Home() {
       }
 
       const data = await response.json();
-      console.log("Backend Response:", data);
       setResults({
         players: data.results,
         avgVillageElo: data.avg_village_elo,
@@ -212,6 +245,35 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 font-sans">
       <h1 className="text-3xl font-bold mb-4">🏆 Calculadora Liga Española 🏆</h1>
+
+      {/* 🟡 C & D: Search box + filtered profile list */}
+      <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mb-4">
+        <h2 className="text-xl font-bold mb-2">🔍 Buscar y Eliminar Perfiles Guardados</h2>
+        <input
+          type="text"
+          className="p-2 border rounded w-full mb-4"
+          placeholder="Buscar perfiles por nombre..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+
+        <ul>
+          {filteredProfiles.map((profile, i) => (
+            <li key={i} className="flex justify-between items-center border-b py-2">
+              <span>{profile.name} ({profile.team}) - Elo: {profile.elo}</span>
+              <button
+                onClick={() => deleteProfile(profile.name)}
+                className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600"
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+          {filteredProfiles.length === 0 && (
+            <li className="text-gray-500">No matching profiles found.</li>
+          )}
+        </ul>
+      </div>
 
       <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl">
         {players.map((player, index) => (
@@ -265,102 +327,101 @@ export default function Home() {
                 type="checkbox"
                 checked={player.diedNight1}
                 onChange={(e) => handleChange(index, "diedNight1", e.target.checked)}
-              />
-              <span>Died Night 1</span>
-            </label>
+            />
+            <span>Died Night 1</span>
+          </label>
 
-            <label className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                checked={player.penalty}
-                onChange={(e) => handleChange(index, "penalty", e.target.checked)}
-              />
-              <span>Penalización (-50 Elo)</span>
-            </label>
-          </div>
-        ))}
-
-        <div className="mt-4">
-          <label className="font-semibold">Winning Team: </label>
-          <select
-            className="p-2 border rounded ml-2"
-            value={winningTeam}
-            onChange={(e) => setWinningTeam(e.target.value)}
-          >
-            <option value="Village">Village</option>
-            <option value="Werewolf">Werewolf</option>
-            <option value="Solo Killer">Solo Killer</option>
-            <option value="Solo Voting">Solo Voting</option>
-            <option value="Couple/Instigator">Couple/Instigator</option>
-          </select>
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={player.penalty}
+              onChange={(e) => handleChange(index, "penalty", e.target.checked)}
+            />
+            <span>Penalización (-50 Elo)</span>
+          </label>
         </div>
+      ))}
 
-        <button
-          className="mt-4 bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
-          onClick={submitMatch}
+      <div className="mt-4">
+        <label className="font-semibold">Winning Team: </label>
+        <select
+          className="p-2 border rounded ml-2"
+          value={winningTeam}
+          onChange={(e) => setWinningTeam(e.target.value)}
         >
-          Submit Match
-        </button>
-
-        <button
-          className="mt-4 bg-green-500 text-white p-2 rounded hover:bg-green-600"
-          onClick={saveProfiles}
-        >
-          Save Profiles
-        </button>
+          <option value="Village">Village</option>
+          <option value="Werewolf">Werewolf</option>
+          <option value="Solo Killer">Solo Killer</option>
+          <option value="Solo Voting">Solo Voting</option>
+          <option value="Couple/Instigator">Couple/Instigator</option>
+        </select>
       </div>
 
-      {results ? (
-        <>
-          <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
-            <h2 className="text-2xl font-bold mb-2">📊 Parámetros Adicionales</h2>
-            <p className="mb-2"><strong>Promedio Aldea Elo:</strong> {Math.round(results.avgVillageElo)}</p>
-            <p className="mb-2"><strong>Promedio Alianza Malvada Elo:</strong> {Math.round(results.avgEvilAllianceElo)}</p>
-            <p className="mb-2">
-              <strong>Resultado Esperado:</strong> 
-              <span className="ml-2">Aldea: {results.expectedResult.village_expected_score.toFixed(2)}</span>, 
-              <span className="ml-2">Alianza Malvada: {results.expectedResult.evil_alliance_expected_score.toFixed(2)}</span>
-            </p>
-          </div>
+      <button
+        className="mt-4 bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+        onClick={submitMatch}
+      >
+        Submit Match
+      </button>
 
-          <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
-            <h2 className="text-2xl font-bold mb-2">📊 Resultados</h2>
-            <table className="w-full border-collapse border border-gray-400 mt-4">
-              <thead>
-                <tr className="bg-gray-200 border border-gray-400">
-                  <th className="border p-2">Name</th>
-                  <th className="border p-2">Team</th>
-                  <th className="border p-2">Old Elo</th>
-                  <th className="border p-2">New Elo</th>
-                  <th className="border p-2">Change</th>
-                  <th className="border p-2">League</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.players.map((player, index) => (
-                  <tr key={index} className="text-center border border-gray-400">
-                    <td className="border p-2 bg-white">{player.name}</td>
-                    <td className={`border p-2 font-bold ${getTeamBackgroundColor(player.team)}`}>{player.team}</td>
-                    <td className="border p-2 bg-white">{player.old_elo}</td>
-                    <td className="border p-2 bg-white">{player.new_elo}</td>
-                    <td className={`border p-2 ${getChangeBackgroundColor(player.elo_change)}`}>{player.elo_change}</td>
-                    <td
-                      className={`border border-black p-2 font-bold bg-black ${getLeagueFontColor(player.league)}`}
-                    >
-                      {player.league}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      ) : (
-        <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
-          <h2 className="text-2xl font-bold mb-2">📊 Match Results</h2>
-          <p className="text-center">No results available</p>
-        </div>
-      )}
+      <button
+        className="mt-4 bg-green-500 text-white p-2 rounded hover:bg-green-600"
+        onClick={saveProfiles}
+      >
+        Save Profiles
+      </button>
     </div>
-  );
-}
+
+    {results ? (
+      <>
+        <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
+          <h2 className="text-2xl font-bold mb-2">📊 Parámetros Adicionales</h2>
+          <p className="mb-2"><strong>Promedio Aldea Elo:</strong> {Math.round(results.avgVillageElo)}</p>
+          <p className="mb-2"><strong>Promedio Alianza Malvada Elo:</strong> {Math.round(results.avgEvilAllianceElo)}</p>
+          <p className="mb-2">
+            <strong>Resultado Esperado:</strong> 
+            <span className="ml-2">Aldea: {results.expectedResult.village_expected_score.toFixed(2)}</span>, 
+            <span className="ml-2">Alianza Malvada: {results.expectedResult.evil_alliance_expected_score.toFixed(2)}</span>
+          </p>
+        </div>
+
+        <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
+          <h2 className="text-2xl font-bold mb-2">📊 Resultados</h2>
+          <table className="w-full border-collapse border border-gray-400 mt-4">
+            <thead>
+              <tr className="bg-gray-200 border border-gray-400">
+                <th className="border p-2">Name</th>
+                <th className="border p-2">Team</th>
+                <th className="border p-2">Old Elo</th>
+                <th className="border p-2">New Elo</th>
+                <th className="border p-2">Change</th>
+                <th className="border p-2">League</th>
+              </tr>
+            </thead>
+            <tbody>
+              {results.players.map((player, index) => (
+                <tr key={index} className="text-center border border-gray-400">
+                  <td className="border p-2 bg-white">{player.name}</td>
+                  <td className={`border p-2 font-bold ${getTeamBackgroundColor(player.team)}`}>{player.team}</td>
+                  <td className="border p-2 bg-white">{player.old_elo}</td>
+                  <td className="border p-2 bg-white">{player.new_elo}</td>
+                  <td className={`border p-2 ${getChangeBackgroundColor(player.elo_change)}`}>{player.elo_change}</td>
+                  <td
+                    className={`border border-black p-2 font-bold bg-black ${getLeagueFontColor(player.league)}`}
+                  >
+                    {player.league}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </>
+    ) : (
+      <div className="bg-white shadow-md p-4 rounded-lg w-full max-w-4xl mt-6">
+        <h2 className="text-2xl font-bold mb-2">📊 Match Results</h2>
+        <p className="text-center">No results available</p>
+      </div>
+    )}
+  </div>
+);
