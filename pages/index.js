@@ -3,8 +3,9 @@ import { useState, useEffect } from "react";
 export default function Home() {
   const generateRandomNames = () => {
     const names = [
-      "Player1", "Player2", "Player3", "Player4", "Player5", "Player6", "Player7", "Player8", "Player9", "Player10",
-      "Player11", "Player12", "Player13", "Player14", "Player15", "Player16"
+      "Player1", "Player2", "Player3", "Player4", "Player5", "Player6",
+      "Player7", "Player8", "Player9", "Player10", "Player11", "Player12",
+      "Player13", "Player14", "Player15", "Player16"
     ];
     return names;
   };
@@ -62,17 +63,14 @@ export default function Home() {
     } else if (index === 15) {
       team = "Solo Killer";
       league = "Leyenda";
-    } else if (index === 16) {
-      team = "Couple/Instigator";
-      league = "Maestro";
     }
+    // Removed unreachable index === 16 condition
 
     return { name, elo: 1000, team, diedNight1: false, league, penalty: false };
   });
 
   const [players, setPlayers] = useState(defaultPlayers);
   const [savedProfiles, setSavedProfiles] = useState([]);
-
   const [winningTeam, setWinningTeam] = useState("Village");
   const [results, setResults] = useState(null);
 
@@ -103,7 +101,7 @@ export default function Home() {
     }
     fetchSavedProfiles();
   }, []);
-  
+
   const handleChange = (index, field, value) => {
     const newPlayers = [...players];
     newPlayers[index] = { ...newPlayers[index], [field]: value };
@@ -115,9 +113,7 @@ export default function Home() {
       const profilesToSave = players.map(player => ({
         name: player.name,
         current_elo: Number(player.elo),
-        team: player.team,
-        died_night_1: player.diedNight1,
-        penalty: player.penalty
+        team: player.team
       }));
 
       const res = await fetch(`${BACKEND_URL}/save-players`, {
@@ -162,67 +158,56 @@ export default function Home() {
   };
 
   const submitMatch = async () => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/calculate-elo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        players_data: players.map(p => ({
-          name: p.name,
-          current_elo: Number(p.elo),
-          team: p.team,
-          died_night_1: p.diedNight1,
-          penalty: p.penalty,
-        })),
-        village_won: winningTeam === "Village",
-        solo_killer_won: winningTeam === "Solo Killer",
-        solo_voting_won: winningTeam === "Solo Voting",
-        couple_instigator_won: winningTeam === "Couple/Instigator",
-      }),
-    });
+    try {
+      const response = await fetch(`${BACKEND_URL}/calculate-elo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          players_data: players.map(p => ({
+            name: p.name,
+            current_elo: Number(p.elo),
+            team: p.team,
+            died_night_1: p.diedNight1,
+            penalty: p.penalty,
+          })),
+          village_won: winningTeam === "Village",
+          solo_killer_won: winningTeam === "Solo Killer",
+          solo_voting_won: winningTeam === "Solo Voting",
+          couple_instigator_won: winningTeam === "Couple/Instigator",
+        }),
+      });
 
-    if (!response.ok) {
-      throw new Error("Network response was not ok");
-    }
-
-    const data = await response.json();
-    console.log("Backend Response:", data);
-    setResults({
-      players: data.results,
-      avgVillageElo: data.avg_village_elo,
-      avgEvilAllianceElo: data.avg_evil_alliance_elo,
-      expectedResult: data.expected_result,
-    });
-
-    const updatedPlayers = players.map(player => {
-      const updatedPlayer = data.results.find(p => p.name === player.name);
-      if (updatedPlayer) {
-        return {
-          ...player,
-          elo: updatedPlayer.new_elo,
-        };
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
       }
-      return player;
-    });
 
-    setPlayers(updatedPlayers);
+      const data = await response.json();
+      console.log("Backend Response:", data);
+      setResults({
+        players: data.results,
+        avgVillageElo: data.avg_village_elo,
+        avgEvilAllianceElo: data.avg_evil_alliance_elo,
+        expectedResult: data.expected_result,
+      });
 
-    // Refresh saved profiles so dropdown reflects updated Elo values
-    const fetchRes = await fetch(`${BACKEND_URL}/get-players`);
-    const updatedProfiles = await fetchRes.json();
-    setSavedProfiles(updatedProfiles.map(p => ({
-      name: p.name,
-      elo: p.current_elo,
-      team: p.team,
-      diedNight1: false,
-      penalty: false,
-    })));
+      const updatedPlayers = players.map(player => {
+        const updatedPlayer = data.results.find(p => p.name === player.name);
+        if (updatedPlayer) {
+          return {
+            ...player,
+            elo: updatedPlayer.new_elo,
+          };
+        }
+        return player;
+      });
 
-  } catch (error) {
-    console.error("Fetch error:", error);
-    alert("There was an error submitting the match. Please try again.");
-  }
-};
+      setPlayers(updatedPlayers);
+
+    } catch (error) {
+      console.error("Fetch error:", error);
+      alert("There was an error submitting the match. Please try again.");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 font-sans">
@@ -292,7 +277,6 @@ export default function Home() {
               />
               <span>Penalización (-50 Elo)</span>
             </label>
-
           </div>
         ))}
 
@@ -378,3 +362,5 @@ export default function Home() {
         </div>
       )}
     </div>
+  );
+}
