@@ -164,12 +164,12 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          players_data: players.map(player => ({
-            name: player.name,
-            current_elo: Number(player.elo),
-            team: player.team,
-            died_night_1: player.diedNight1,
-            penalty: player.penalty,
+          players_data: players.map(p => ({
+            name: p.name,
+            current_elo: Number(p.elo),
+            team: p.team,
+            died_night_1: p.diedNight1,
+            penalty: p.penalty,
           })),
           village_won: winningTeam === "Village",
           solo_killer_won: winningTeam === "Solo Killer",
@@ -177,11 +177,11 @@ export default function Home() {
           couple_instigator_won: winningTeam === "Couple/Instigator",
         }),
       });
-
+  
       if (!response.ok) {
         throw new Error("Network response was not ok");
       }
-
+  
       const data = await response.json();
       console.log("Backend Response:", data);
       setResults({
@@ -190,7 +190,7 @@ export default function Home() {
         avgEvilAllianceElo: data.avg_evil_alliance_elo,
         expectedResult: data.expected_result,
       });
-
+  
       const updatedPlayers = players.map(player => {
         const updatedPlayer = data.results.find(p => p.name === player.name);
         if (updatedPlayer) {
@@ -201,14 +201,15 @@ export default function Home() {
         }
         return player;
       });
-
+  
       setPlayers(updatedPlayers);
-
+  
     } catch (error) {
       console.error("Fetch error:", error);
       alert("There was an error submitting the match. Please try again.");
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col items-center p-6 font-sans">
